@@ -33,6 +33,9 @@ public class CommandLineController {
     private File videoFile;
     private String errorMessage;
 
+    //true when subtitles are selected from the command line
+    private boolean subtitleRequested;
+
     //stores frame processors in the same order as the command line
     private final List<FrameProcessor> frameProcessors =
             new ArrayList<>();
@@ -77,6 +80,10 @@ public class CommandLineController {
     //lets the video player use the processors selected from the command line
     public List<FrameProcessor> getFrameProcessors() {
         return frameProcessors;
+    }
+
+    public boolean isSubtitleRequested() {
+        return subtitleRequested;
     }
 
     public boolean shouldLaunchApplication() {
@@ -168,6 +175,11 @@ public class CommandLineController {
 
                 addFrameProcessor('p');
 
+            } else if ("-S".equals(arg) ||
+                    "--subtitle-frames".equals(arg)) {
+
+                addFrameProcessor('S');
+
             //try stacked options such as -jfddn
             } else if (parseStackedFrameProcessors(arg)) {
 
@@ -230,7 +242,7 @@ public class CommandLineController {
                 arg.substring(1);
 
         String validOptions =
-                "nsfwyvdjmbp";
+                "nsfwyvdjmbpS";
 
         //check all letters before adding anything
         for (int i = 0;
@@ -330,6 +342,17 @@ public class CommandLineController {
                 );
                 break;
 
+            case 'S':
+
+                //subtitles start enabled when -S is used
+                subtitleRequested = true;
+
+                frameProcessors.add(
+                        new SubtitleFrameProcessor()
+                );
+
+                break;
+
             default:
                 break;
         }
@@ -376,6 +399,7 @@ public class CommandLineController {
         System.out.println("  -m, --mottle-frames    Add cloudy emulsion mottling");
         System.out.println("  -b, --bleed-frames     Bleed light into frames");
         System.out.println("  -p, --pepper-frames    Pepper frames with dark spots/blotches");
+        System.out.println("  -S, --subtitle-frames  Add speech-to-text subtitles to frames");
 
         System.out.println();
 
