@@ -24,6 +24,9 @@ public class VideoPlayerController {
 
     //stores the current subtitle state
     private boolean subtitleEnabled;
+    
+    //keeps the subtitle processor so it can be toggled during playback
+    private final SubtitleFrameProcessor subtitleProcessor;
 
     public VideoPlayerController(
             boolean audioEnabled,
@@ -40,6 +43,45 @@ public class VideoPlayerController {
         //use the command line value as the starting subtitle state
         this.subtitleEnabled =
                 subtitleEnabled;
+        SubtitleFrameProcessor foundSubtitleProcessor =
+                null;
+
+        //find the subtitle processor if -S was used
+        for (FrameProcessor processor :
+                frameProcessors) {
+
+            if (processor instanceof SubtitleFrameProcessor) {
+
+                foundSubtitleProcessor =
+                        (SubtitleFrameProcessor) processor;
+
+                break;
+            }
+        }
+
+        //if -S was not used add a disabled processor at the end
+        //this allows the CC button to turn subtitles on later
+        if (foundSubtitleProcessor == null) {
+
+            foundSubtitleProcessor =
+                    new SubtitleFrameProcessor();
+
+            foundSubtitleProcessor.setEnabled(
+                    false
+            );
+
+            frameProcessors.add(
+                    foundSubtitleProcessor
+            );
+        }
+
+        subtitleProcessor =
+                foundSubtitleProcessor;
+
+        //make sure processor state matches the starting button state
+        subtitleProcessor.setEnabled(
+                subtitleEnabled
+        );
 
         model =
                 new VideoPlayerModel(
@@ -196,6 +238,11 @@ public class VideoPlayerController {
 
         subtitleEnabled =
                 !subtitleEnabled;
+
+        //turn subtitle processing on or off
+        subtitleProcessor.setEnabled(
+                subtitleEnabled
+        );
 
         //update the CC button icon
         view.showSubtitleEnabled(
