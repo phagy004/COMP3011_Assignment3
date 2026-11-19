@@ -204,8 +204,12 @@ public class VideoPlayerController {
 
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
-        subtitleProcessor.setSubtitles(subtitleService.getSubtitles(file));
+
+        subtitleProcessor.setSubtitles(List.of());
         model.play(file);
+
+        subtitleService.getSubtitles(file)
+                .thenAccept(subtitleProcessor::setSubtitles);
     }
 
     public void shutdown() {
