@@ -19,9 +19,9 @@ public class SubtitleFrameProcessor extends FrameProcessor {
 
     private static final int MAX_CHARACTERS_PER_LINE = 42;
     private static final int MAX_LINES = 2;
+    private volatile long mediaStartTimestampUs = Long.MAX_VALUE;
 
     private volatile boolean enabled = true;
-    private volatile long mediaStartTimestampUs = Long.MIN_VALUE;
     private volatile List<SubtitleSegment> subtitles = List.of();
 
     public SubtitleFrameProcessor() {
@@ -30,16 +30,12 @@ public class SubtitleFrameProcessor extends FrameProcessor {
 
     @Override
     public void process(Frame frame, InfoFrame info) throws Exception {
-
-        if (mediaStartTimestampUs == Long.MIN_VALUE) {
-            mediaStartTimestampUs = info.timestampUs();
-        }
-
         if (!enabled) {
             return;
         }
 
-        SubtitleSegment subtitle = findSubtitle(info.timestampUs());
+        SubtitleSegment subtitle =
+                findSubtitle(info.playbackTimestampUs());
 
         if (subtitle == null) {
             return;
@@ -62,25 +58,16 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             return;
         }
 
-        //copy the list so another thread cannot change it
         this.subtitles = List.copyOf(subtitles);
     }
 
-    public SubtitleSegment findSubtitle(long timestampUs) {
+    public SubtitleSegment findSubtitle(long playbackTimestampUs) {
+        double timeSeconds =
+                playbackTimestampUs / 1_000_000.0;
 
-        long startTimestamp = mediaStartTimestampUs;
+        for (int i = subtitles.size() - 1; i >= 0; i--) {
+            SubtitleSegment subtitle = subtitles.get(i);
 
-        double timeSeconds;
-
-        if (startTimestamp == Long.MIN_VALUE) {
-            timeSeconds = 0;
-        } else {
-            timeSeconds =
-                    Math.max(0, timestampUs - startTimestamp)
-                    / 1_000_000.0;
-        }
-
-        for (SubtitleSegment subtitle : subtitles) {
             if (subtitle.isVisibleAt(timeSeconds)) {
                 return subtitle;
             }
@@ -98,7 +85,8 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             throw new Exception("SubtitleFrameProcessor requires byte-backed image frames");
         }
 
-        if (videoInfo.imageDepth() != Frame.DEPTH_UBYTE && videoInfo.imageDepth() != Frame.DEPTH_BYTE) {
+        if (videoInfo.imageDepth() != Frame.DEPTH_UBYTE
+                && videoInfo.imageDepth() != Frame.DEPTH_BYTE) {
             throw new Exception("SubtitleFrameProcessor requires 8-bit image frames");
         }
 
@@ -118,11 +106,21 @@ public class SubtitleFrameProcessor extends FrameProcessor {
         int overlayHeight = fontSize * 3;
 
         Font font = new Font("SansSerif", Font.BOLD, fontSize);
-        BufferedImage overlay = new BufferedImage(width, overlayHeight, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage overlay = new BufferedImage(
+                width,
+                overlayHeight,
+                BufferedImage.TYPE_INT_ARGB);
+
         Graphics2D graphics = overlay.createGraphics();
 
-        graphics.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-        graphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        graphics.setRenderingHint(
+                RenderingHints.KEY_TEXT_ANTIALIASING,
+                RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+
+        graphics.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON);
+
         graphics.setFont(font);
 
         FontMetrics metrics = graphics.getFontMetrics();
@@ -133,20 +131,23 @@ public class SubtitleFrameProcessor extends FrameProcessor {
 
         for (int i = 0; i < lines.size(); i++) {
             String line = lines.get(i);
-
             int textWidth = metrics.stringWidth(line);
             float x = Math.max(0, (width - textWidth) / 2.0f);
             float y = startY + i * lineHeight;
 
-            GlyphVector glyphs = font.createGlyphVector(graphics.getFontRenderContext(), line);
+            GlyphVector glyphs = font.createGlyphVector(
+                    graphics.getFontRenderContext(),
+                    line);
+
             Shape textShape = glyphs.getOutline(x, y);
 
-            //draw black outline
             graphics.setColor(Color.BLACK);
-            graphics.setStroke(new BasicStroke(outlineWidth, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            graphics.setStroke(new BasicStroke(
+                    outlineWidth,
+                    BasicStroke.CAP_ROUND,
+                    BasicStroke.JOIN_ROUND));
             graphics.draw(textShape);
 
-            //draw white text
             graphics.setColor(Color.WHITE);
             graphics.fill(textShape);
         }
@@ -175,6 +176,7 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             }
 
             int split = findSplitPosition(remaining);
+
             lines.add(remaining.substring(0, split).trim());
             remaining = remaining.substring(split).trim();
         }
@@ -184,7 +186,9 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             String lastLine = lines.get(lastIndex);
 
             if (lastLine.length() > MAX_CHARACTERS_PER_LINE) {
-                lines.set(lastIndex, lastLine.substring(0, MAX_CHARACTERS_PER_LINE));
+                lines.set(
+                        lastIndex,
+                        lastLine.substring(0, MAX_CHARACTERS_PER_LINE));
             }
         }
 
@@ -194,17 +198,19 @@ public class SubtitleFrameProcessor extends FrameProcessor {
     private int findSplitPosition(String text) {
         int limit = Math.min(MAX_CHARACTERS_PER_LINE, text.length());
 
-        //try punctuation first
         for (int i = limit - 1; i >= 1; i--) {
             char character = text.charAt(i);
 
-            if (character == ',' || character == '.' || character == '!'
-                    || character == '?' || character == ';' || character == ':') {
+            if (character == ','
+                    || character == '.'
+                    || character == '!'
+                    || character == '?'
+                    || character == ';'
+                    || character == ':') {
                 return i + 1;
             }
         }
 
-        //otherwise use the last space
         for (int i = limit; i >= 1; i--) {
             if (text.charAt(i - 1) == ' ') {
                 return i;
@@ -214,7 +220,11 @@ public class SubtitleFrameProcessor extends FrameProcessor {
         return limit;
     }
 
-    private void copyOverlayToFrame(ByteBuffer pixels, BufferedImage overlay, int overlayY) {
+    private void copyOverlayToFrame(
+            ByteBuffer pixels,
+            BufferedImage overlay,
+            int overlayY) {
+
         int frameWidth = videoInfo.imageWidth();
         int frameHeight = videoInfo.imageHeight();
         int channels = videoInfo.imageChannels();
@@ -242,7 +252,6 @@ public class SubtitleFrameProcessor extends FrameProcessor {
                 int blue = argb & 0xFF;
                 int base = rowStart + x * channels;
 
-                //JavaCV stores image colour in BGR order
                 blendChannel(pixels, base, blue, alpha);
                 blendChannel(pixels, base + 1, green, alpha);
                 blendChannel(pixels, base + 2, red, alpha);
@@ -250,14 +259,22 @@ public class SubtitleFrameProcessor extends FrameProcessor {
         }
     }
 
-    private void blendChannel(ByteBuffer pixels, int index, int overlayValue, int alpha) {
+    private void blendChannel(
+            ByteBuffer pixels,
+            int index,
+            int overlayValue,
+            int alpha) {
+
         int originalValue = Byte.toUnsignedInt(pixels.get(index));
-        int result = (overlayValue * alpha + originalValue * (255 - alpha)) / 255;
+        int result =
+                (overlayValue * alpha
+                + originalValue * (255 - alpha))
+                / 255;
 
         pixels.put(index, (byte) result);
     }
     
     public void resetTiming() {
-        mediaStartTimestampUs = Long.MIN_VALUE;
+        mediaStartTimestampUs = Long.MAX_VALUE;
     }
 }

@@ -205,15 +205,23 @@ public class VideoPlayerController {
 
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
-        subtitleProcessor.setSubtitles(List.of());
         subtitleProcessor.resetTiming();
+        subtitleProcessor.setSubtitles(List.of());
 
-        //start video immediately
-        model.play(file);
+        if (subtitleEnabled) {
+            subtitleService.getSubtitles(file).thenAccept(subtitles -> {
+                subtitleProcessor.setSubtitles(subtitles);
 
-        //load subtitles in background
-        subtitleService.getSubtitles(file)
-                .thenAccept(subtitleProcessor::setSubtitles);
+                Platform.runLater(() -> {
+                    model.play(file);
+                });
+            });
+        } else {
+            model.play(file);
+
+            subtitleService.getSubtitles(file)
+                    .thenAccept(subtitleProcessor::setSubtitles);
+        }
     }
 
     public void shutdown() {

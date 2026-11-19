@@ -584,14 +584,19 @@ public class VideoPlayerModel {
                         timestampUs;
             }
 
-            int frameNumber =
-                    grabber.getFrameNumber();
+            int frameNumber = grabber.getFrameNumber();
 
-            InfoFrame info =
-                    new InfoFrame(
-                            frameNumber,
-                            timestampUs
-                    );
+            long relativeTimestampUs = Math.max(
+                    0,
+                    timestampUs - firstTimestampUs);
+
+            long playbackTimestampUs =
+                    logicalPlaybackBaseUs + relativeTimestampUs;
+
+            InfoFrame info = new InfoFrame(
+                    frameNumber,
+                    timestampUs,
+                    playbackTimestampUs);
 
             //clone because the decoder may reuse the same frame memory
             Frame frameCopy =

@@ -25,33 +25,28 @@ public class SubtitleService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final AudioExtractor audioExtractor = new AudioExtractor();
 
-    public CompletableFuture<List<SubtitleSegment>> getSubtitles(File videoFile) {
+    public CompletableFuture<List<SubtitleSegment>> getSubtitles(
+            File videoFile) {
 
         if (videoFile == null || !videoFile.exists()) {
             return CompletableFuture.completedFuture(List.of());
         }
 
-        //Wait a little so video can start first
         return CompletableFuture
-                .runAsync(
-                        () -> {},
-                        CompletableFuture.delayedExecutor(
-                                1,
-                                TimeUnit.SECONDS))
-                .thenCompose(ignore ->
-                        CompletableFuture.supplyAsync(() -> {
-                            try {
-                                return audioExtractor.extract(videoFile);
-                            } catch (Exception error) {
-                                throw new RuntimeException(error);
-                            }
-                        }))
+                .supplyAsync(() -> {
+                    try {
+                        return audioExtractor.extract(videoFile);
+                    } catch (Exception error) {
+                        throw new RuntimeException(error);
+                    }
+                })
                 .thenCompose(audioFile ->
                         sendWithRetry(audioFile, 0))
                 .exceptionally(error -> {
                     System.out.println(
                             "Could not load subtitles: "
                             + error.getMessage());
+
                     return List.of();
                 });
     }
@@ -64,8 +59,11 @@ public class SubtitleService {
                 .exceptionallyCompose(error -> {
 
                     if (attempt >= MAX_RETRIES) {
-                        System.out.println("Subtitle server unavailable.");
-                        return CompletableFuture.completedFuture(List.of());
+                        System.out.println(
+                                "Subtitle server unavailable.");
+
+                        return CompletableFuture
+                                .completedFuture(List.of());
                     }
 
                     System.out.println(
@@ -84,14 +82,18 @@ public class SubtitleService {
                 });
     }
 
-    private CompletableFuture<List<SubtitleSegment>> sendAudio(File audioFile) {
+    private CompletableFuture<List<SubtitleSegment>> sendAudio(
+            File audioFile) {
+
         try {
             String boundary = "SubtitleBoundary";
 
             String header =
                     "--" + boundary + "\r\n"
-                    + "Content-Disposition: form-data; name=\"file\"; filename=\""
-                    + audioFile.getName() + "\"\r\n"
+                    + "Content-Disposition: form-data; "
+                    + "name=\"file\"; filename=\""
+                    + audioFile.getName()
+                    + "\"\r\n"
                     + "Content-Type: audio/mpeg\r\n\r\n";
 
             String footer =
@@ -100,19 +102,23 @@ public class SubtitleService {
             HttpRequest.BodyPublisher body =
                     HttpRequest.BodyPublishers.concat(
                             HttpRequest.BodyPublishers.ofByteArray(
-                                    header.getBytes(StandardCharsets.UTF_8)),
+                                    header.getBytes(
+                                            StandardCharsets.UTF_8)),
                             HttpRequest.BodyPublishers.ofFile(
                                     audioFile.toPath()),
                             HttpRequest.BodyPublishers.ofByteArray(
-                                    footer.getBytes(StandardCharsets.UTF_8)));
+                                    footer.getBytes(
+                                            StandardCharsets.UTF_8)));
 
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(SUBTITLE_URL))
-                    .header(
-                            "Content-Type",
-                            "multipart/form-data; boundary=" + boundary)
-                    .POST(body)
-                    .build();
+            HttpRequest request =
+                    HttpRequest.newBuilder()
+                            .uri(URI.create(SUBTITLE_URL))
+                            .header(
+                                    "Content-Type",
+                                    "multipart/form-data; boundary="
+                                    + boundary)
+                            .POST(body)
+                            .build();
 
             return client.sendAsync(
                     request,
@@ -141,15 +147,25 @@ public class SubtitleService {
         }
     }
 
-    private List<SubtitleSegment> readResponse(String responseBody) {
+    private List<SubtitleSegment> readResponse(
+            String responseBody) {
+
         try {
-            JsonNode json = objectMapper.readTree(responseBody);
-            List<SubtitleSegment> subtitles = new ArrayList<>();
+            JsonNode json =
+                    objectMapper.readTree(responseBody);
+
+            List<SubtitleSegment> subtitles =
+                    new ArrayList<>();
 
             for (JsonNode item : json) {
-                String text = item.path("text").asText();
-                double start = item.path("start").asDouble();
-                double end = item.path("end").asDouble();
+                String text =
+                        item.path("text").asText();
+
+                double start =
+                        item.path("start").asDouble();
+
+                double end =
+                        item.path("end").asDouble();
 
                 subtitles.add(
                         new SubtitleSegment(
