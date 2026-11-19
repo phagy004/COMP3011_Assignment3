@@ -207,22 +207,12 @@ public class VideoPlayerController {
         view.setPlaybackControlsDisabled(false);
         subtitleProcessor.setSubtitles(List.of());
 
-        if (subtitleEnabled) {
-            //wait for subtitles before starting so timestamps begin at the same time
-            subtitleService.getSubtitles(file).thenAccept(subtitles -> {
-                subtitleProcessor.setSubtitles(subtitles);
+        //start video immediately
+        model.play(file);
 
-                Platform.runLater(() -> {
-                    model.play(file);
-                });
-            });
-        } else {
-            //subtitles are off, so video can start immediately
-            model.play(file);
-
-            subtitleService.getSubtitles(file)
-                    .thenAccept(subtitleProcessor::setSubtitles);
-        }
+        //load subtitles in background
+        subtitleService.getSubtitles(file)
+                .thenAccept(subtitleProcessor::setSubtitles);
     }
 
     public void shutdown() {

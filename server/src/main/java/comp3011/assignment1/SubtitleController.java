@@ -1,5 +1,6 @@
 package comp3011.assignment1;
 
+import java.io.IOException;
 import java.util.List;
 
 import org.springframework.http.ResponseEntity;
@@ -13,16 +14,18 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/v1")
 public class SubtitleController {
 
+    private final SubtitleTranscriptionService subtitleService;
+
+    public SubtitleController(SubtitleTranscriptionService subtitleService) {
+        this.subtitleService = subtitleService;
+    }
+
     @PostMapping("/subtitles")
     public ResponseEntity<List<SubtitleItem>> getSubtitles(
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file) throws IOException {
 
-        //temporary response for testing
-        List<SubtitleItem> subtitles = List.of(
-                new SubtitleItem("This came from the server", 2.0, 5.0),
-                new SubtitleItem("The subtitle endpoint is working", 6.0, 9.0),
-                new SubtitleItem("Next we connect Whisper", 10.0, 14.0)
-        );
+        List<SubtitleItem> subtitles =
+                subtitleService.transcribe(file);
 
         return ResponseEntity.ok(subtitles);
     }

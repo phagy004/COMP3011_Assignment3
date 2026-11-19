@@ -28,33 +28,32 @@ public class SubtitleService {
     public CompletableFuture<List<SubtitleSegment>> getSubtitles(File videoFile) {
 
         if (videoFile == null || !videoFile.exists()) {
-            System.out.println("Media file is no longer available.");
             return CompletableFuture.completedFuture(List.of());
         }
 
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                if (!videoFile.exists()) {
-                    throw new IllegalStateException(
-                            "Media file was removed.");
-                }
-
-                return audioExtractor.extract(videoFile);
-
-            } catch (Exception error) {
-                throw new RuntimeException(error);
-            }
-
-        }).thenCompose(audioFile ->
-                sendWithRetry(audioFile, 0))
-
-          .exceptionally(error -> {
-              System.out.println(
-                      "Could not load subtitles: "
-                      + error.getMessage());
-
-              return List.of();
-          });
+        //Wait a little so video can start first
+        return CompletableFuture
+                .runAsync(
+                        () -> {},
+                        CompletableFuture.delayedExecutor(
+                                1,
+                                TimeUnit.SECONDS))
+                .thenCompose(ignore ->
+                        CompletableFuture.supplyAsync(() -> {
+                            try {
+                                return audioExtractor.extract(videoFile);
+                            } catch (Exception error) {
+                                throw new RuntimeException(error);
+                            }
+                        }))
+                .thenCompose(audioFile ->
+                        sendWithRetry(audioFile, 0))
+                .exceptionally(error -> {
+                    System.out.println(
+                            "Could not load subtitles: "
+                            + error.getMessage());
+                    return List.of();
+                });
     }
 
     private CompletableFuture<List<SubtitleSegment>> sendWithRetry(
@@ -119,7 +118,14 @@ public class SubtitleService {
                     request,
                     HttpResponse.BodyHandlers.ofString())
                     .thenCompose(response -> {
+
                         if (response.statusCode() != 200) {
+                            System.out.println(
+                                    "Subtitle server error "
+                                    + response.statusCode()
+                                    + ": "
+                                    + response.body());
+
                             return CompletableFuture.failedFuture(
                                     new RuntimeException(
                                             "Server returned "
