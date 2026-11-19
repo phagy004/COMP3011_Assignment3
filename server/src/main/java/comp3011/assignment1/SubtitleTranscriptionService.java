@@ -30,20 +30,15 @@ public class SubtitleTranscriptionService {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SubtitleUsageService usageService;
 
-    public SubtitleTranscriptionService(
-            SubtitleUsageService usageService) {
-
+    public SubtitleTranscriptionService(SubtitleUsageService usageService) {
         this.usageService = usageService;
     }
 
-    public List<SubtitleItem> transcribe(
-            MultipartFile file) throws IOException {
-
+    public List<SubtitleItem> transcribe(MultipartFile file) throws IOException {
         String apiKey = getApiKey();
 
         ByteArrayResource audioResource =
                 new ByteArrayResource(file.getBytes()) {
-
             @Override
             public String getFilename() {
                 return file.getOriginalFilename();
@@ -54,17 +49,14 @@ public class SubtitleTranscriptionService {
 
         if (file.getContentType() != null) {
             fileHeaders.setContentType(
-                    MediaType.parseMediaType(
-                            file.getContentType()));
+                    MediaType.parseMediaType(file.getContentType()));
         } else {
             fileHeaders.setContentType(
                     MediaType.parseMediaType("audio/mpeg"));
         }
 
         HttpEntity<ByteArrayResource> filePart =
-                new HttpEntity<>(
-                        audioResource,
-                        fileHeaders);
+                new HttpEntity<>(audioResource, fileHeaders);
 
         MultiValueMap<String, Object> body =
                 new LinkedMultiValueMap<>();
@@ -72,20 +64,12 @@ public class SubtitleTranscriptionService {
         body.add("file", filePart);
         body.add("model", "whisper-1");
         body.add("response_format", "verbose_json");
-
-        body.add(
-                "timestamp_granularities[]",
-                "word");
-
-        body.add(
-                "timestamp_granularities[]",
-                "segment");
+        body.add("timestamp_granularities[]", "word");
+        body.add("timestamp_granularities[]", "segment");
 
         HttpHeaders headers = new HttpHeaders();
-
         headers.setBearerAuth(apiKey);
-        headers.setContentType(
-                MediaType.MULTIPART_FORM_DATA);
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
 
         HttpEntity<MultiValueMap<String, Object>> request =
                 new HttpEntity<>(body, headers);
@@ -99,11 +83,9 @@ public class SubtitleTranscriptionService {
                             request,
                             String.class);
 
-            return readSubtitles(
-                    response.getBody());
+            return readSubtitles(response.getBody());
 
         } catch (HttpStatusCodeException error) {
-
             System.out.println(
                     "OpenAI error "
                     + error.getStatusCode()
@@ -116,16 +98,18 @@ public class SubtitleTranscriptionService {
     }
 
     private List<SubtitleItem> readSubtitles(String response) throws IOException {
+        if (response == null || response.isBlank()) {
+            return List.of();
+        }
+
         JsonNode json = objectMapper.readTree(response);
 
         JsonNode usage = json.path("usage");
 
         if (usage.has("seconds")) {
-            usageService.addUsage(
-                    usage.path("seconds").asDouble());
+            usageService.addUsage(usage.path("seconds").asDouble());
         } else {
-            usageService.addUsage(
-                    json.path("duration").asDouble());
+            usageService.addUsage(json.path("duration").asDouble());
         }
 
         JsonNode words = json.path("words");
@@ -134,30 +118,20 @@ public class SubtitleTranscriptionService {
         List<SubtitleItem> subtitles = new ArrayList<>();
 
         StringBuilder text = new StringBuilder();
-
         double start = -1;
         double end = 0;
         double previousEnd = -1;
 
         for (JsonNode word : words) {
-
-            String value =
-                    word.path("word").asText().trim();
-
-            double wordStart =
-                    word.path("start").asDouble();
-
-            double wordEnd =
-                    word.path("end").asDouble();
+            String value = word.path("word").asText().trim();
+            double wordStart = word.path("start").asDouble();
+            double wordEnd = word.path("end").asDouble();
 
             if (value.isEmpty()) {
                 continue;
             }
 
-            if (!isAllowedWord(
-                    wordStart,
-                    wordEnd,
-                    segments)) {
+            if (!isAllowedWord(wordStart, wordEnd, segments)) {
                 continue;
             }
 
@@ -165,26 +139,19 @@ public class SubtitleTranscriptionService {
                 start = wordStart;
             }
 
-            boolean pause =
-                    previousEnd >= 0
-                    && wordStart - previousEnd > 0.6;
+            boolean longPause =
+                    previousEnd >= 0 && wordStart - previousEnd > 0.6;
 
             boolean tooLong =
-                    text.length()
-                    + value.length()
-                    + 1 > 84;
+                    text.length() + value.length() + 1 > 84;
 
-            boolean tooLongTime =
+            boolean tooLongOnScreen =
                     wordEnd - start > 7.0;
 
             if (text.length() > 0
-                    && (pause || tooLong || tooLongTime)) {
+                    && (longPause || tooLong || tooLongOnScreen)) {
 
-                addSubtitle(
-                        subtitles,
-                        text,
-                        start,
-                        end);
+                addSubtitle(subtitles, text, start, end);
 
                 text.setLength(0);
                 start = wordStart;
@@ -195,17 +162,11 @@ public class SubtitleTranscriptionService {
             }
 
             text.append(value);
-
             end = wordEnd;
             previousEnd = wordEnd;
 
             if (endsSentence(value)) {
-
-                addSubtitle(
-                        subtitles,
-                        text,
-                        start,
-                        end);
+                addSubtitle(subtitles, text, start, end);
 
                 text.setLength(0);
                 start = -1;
@@ -214,11 +175,7 @@ public class SubtitleTranscriptionService {
         }
 
         if (text.length() > 0 && start >= 0) {
-            addSubtitle(
-                    subtitles,
-                    text,
-                    start,
-                    end);
+            addSubtitle(subtitles, text, start, end);
         }
 
         System.out.println(
@@ -228,7 +185,7 @@ public class SubtitleTranscriptionService {
 
         return subtitles;
     }
-    
+
     private boolean isAllowedWord(
             double wordStart,
             double wordEnd,
@@ -241,7 +198,6 @@ public class SubtitleTranscriptionService {
         double middle = (wordStart + wordEnd) / 2.0;
 
         for (JsonNode segment : segments) {
-
             double segmentStart =
                     segment.path("start").asDouble();
 
@@ -275,11 +231,8 @@ public class SubtitleTranscriptionService {
             return;
         }
 
-        double displayEnd =
-                Math.max(end, start + 1.0);
-
-        displayEnd =
-                Math.min(displayEnd, start + 7.0);
+        double displayEnd = Math.max(end, start + 1.0);
+        displayEnd = Math.min(displayEnd, start + 7.0);
 
         subtitles.add(
                 new SubtitleItem(
@@ -294,33 +247,21 @@ public class SubtitleTranscriptionService {
                 || word.endsWith("!");
     }
 
-    private String getApiKey()
-            throws IOException {
+    private String getApiKey() throws IOException {
+        String key = System.getenv("OPENAI_API_KEY");
 
-        String key =
-                System.getenv(
-                        "OPENAI_API_KEY");
-
-        if (key != null
-                && !key.isBlank()) {
-
+        if (key != null && !key.isBlank()) {
             return key.trim();
         }
 
-        Path keyFile =
-                Path.of("key.txt");
+        Path keyFile = Path.of("key.txt");
 
         if (!Files.exists(keyFile)) {
-            keyFile =
-                    Path.of(
-                            "server",
-                            "key.txt");
+            keyFile = Path.of("server", "key.txt");
         }
 
         if (Files.exists(keyFile)) {
-            return Files
-                    .readString(keyFile)
-                    .trim();
+            return Files.readString(keyFile).trim();
         }
 
         throw new IllegalStateException(

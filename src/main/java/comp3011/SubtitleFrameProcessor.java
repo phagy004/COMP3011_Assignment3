@@ -19,7 +19,6 @@ public class SubtitleFrameProcessor extends FrameProcessor {
 
     private static final int MAX_CHARACTERS_PER_LINE = 42;
     private static final int MAX_LINES = 2;
-    private volatile long mediaStartTimestampUs = Long.MAX_VALUE;
 
     private volatile boolean enabled = true;
     private volatile List<SubtitleSegment> subtitles = List.of();
@@ -34,8 +33,7 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             return;
         }
 
-        SubtitleSegment subtitle =
-                findSubtitle(info.playbackTimestampUs());
+        SubtitleSegment subtitle = findSubtitle(info.playbackTimestampUs());
 
         if (subtitle == null) {
             return;
@@ -62,8 +60,7 @@ public class SubtitleFrameProcessor extends FrameProcessor {
     }
 
     public SubtitleSegment findSubtitle(long playbackTimestampUs) {
-        double timeSeconds =
-                playbackTimestampUs / 1_000_000.0;
+        double timeSeconds = playbackTimestampUs / 1_000_000.0;
 
         for (int i = subtitles.size() - 1; i >= 0; i--) {
             SubtitleSegment subtitle = subtitles.get(i);
@@ -176,20 +173,8 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             }
 
             int split = findSplitPosition(remaining);
-
             lines.add(remaining.substring(0, split).trim());
             remaining = remaining.substring(split).trim();
-        }
-
-        if (lines.size() == MAX_LINES) {
-            int lastIndex = lines.size() - 1;
-            String lastLine = lines.get(lastIndex);
-
-            if (lastLine.length() > MAX_CHARACTERS_PER_LINE) {
-                lines.set(
-                        lastIndex,
-                        lastLine.substring(0, MAX_CHARACTERS_PER_LINE));
-            }
         }
 
         return lines;
@@ -266,15 +251,9 @@ public class SubtitleFrameProcessor extends FrameProcessor {
             int alpha) {
 
         int originalValue = Byte.toUnsignedInt(pixels.get(index));
-        int result =
-                (overlayValue * alpha
-                + originalValue * (255 - alpha))
-                / 255;
+        int result = (overlayValue * alpha
+                + originalValue * (255 - alpha)) / 255;
 
         pixels.put(index, (byte) result);
-    }
-    
-    public void resetTiming() {
-        mediaStartTimestampUs = Long.MAX_VALUE;
     }
 }

@@ -8,27 +8,14 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
-import javafx.application.Platform;
 
-/**
- * The controller part of the video player model-view-controller architecture.
- * 
- * <p>
- * Wires up events from the {@link VideoPlayerView} to the {@link VideoPlayerModel}.
- * This includes button actions, keyboard shortcuts and display resizing.
- * </p>
- */
 public class VideoPlayerController {
+
     private final VideoPlayerModel model;
     private final VideoPlayerView view;
     private final BiConsumer<Integer, Integer> videoSizeChangedHandler;
-
-    //stores the current subtitle state
     private boolean subtitleEnabled;
-    
-    //keeps the subtitle processor so it can be toggled during playback
     private final SubtitleFrameProcessor subtitleProcessor;
-    
     private final SubtitleService subtitleService = new SubtitleService();
 
     public VideoPlayerController(
@@ -37,162 +24,74 @@ public class VideoPlayerController {
             List<FrameProcessor> frameProcessors,
             BiConsumer<Integer, Integer> videoSizeChangedHandler) {
 
-        this.view =
-                new VideoPlayerView();
+        this.view = new VideoPlayerView();
+        this.videoSizeChangedHandler = videoSizeChangedHandler;
+        this.subtitleEnabled = subtitleEnabled;
 
-        this.videoSizeChangedHandler =
-                videoSizeChangedHandler;
+        SubtitleFrameProcessor foundSubtitleProcessor = null;
 
-        //use the command line value as the starting subtitle state
-        this.subtitleEnabled =
-                subtitleEnabled;
-        SubtitleFrameProcessor foundSubtitleProcessor =
-                null;
-
-        //find the subtitle processor if -S was used
-        for (FrameProcessor processor :
-                frameProcessors) {
-
+        for (FrameProcessor processor : frameProcessors) {
             if (processor instanceof SubtitleFrameProcessor) {
-
-                foundSubtitleProcessor =
-                        (SubtitleFrameProcessor) processor;
-
+                foundSubtitleProcessor = (SubtitleFrameProcessor) processor;
                 break;
             }
         }
 
-        //if -S was not used add a disabled processor at the end
-        //this allows the CC button to turn subtitles on later
         if (foundSubtitleProcessor == null) {
-
-            foundSubtitleProcessor =
-                    new SubtitleFrameProcessor();
-
-            foundSubtitleProcessor.setEnabled(
-                    false
-            );
-
-            frameProcessors.add(
-                    foundSubtitleProcessor
-            );
+            foundSubtitleProcessor = new SubtitleFrameProcessor();
+            foundSubtitleProcessor.setEnabled(false);
+            frameProcessors.add(foundSubtitleProcessor);
         }
 
-        subtitleProcessor =
-                foundSubtitleProcessor;
+        subtitleProcessor = foundSubtitleProcessor;
+        subtitleProcessor.setEnabled(subtitleEnabled);
 
-        //make sure processor state matches the starting button state
-        subtitleProcessor.setEnabled(
-                subtitleEnabled
-        );
+        model = new VideoPlayerModel(
+                audioEnabled,
+                frameProcessors,
+                this::onVideoSizeChanged,
+                this::onFrameReady,
+                this::onStatusChanged,
+                this::onPlaybackStateChanged,
+                this::onAudioOutputStateChanged);
 
-        model =
-                new VideoPlayerModel(
-                        audioEnabled,
-                        frameProcessors,
-                        this::onVideoSizeChanged,
-                        this::onFrameReady,
-                        this::onStatusChanged,
-                        this::onPlaybackStateChanged,
-                        this::onAudioOutputStateChanged
-                );
+        view.getStartOverButton().setOnAction(_ -> startOver());
+        view.getBackFiveButton().setOnAction(_ -> backFiveSeconds());
+        view.getPausePlayButton().setOnAction(_ -> togglePause());
+        view.getForwardFiveButton().setOnAction(_ -> forwardFiveSeconds());
+        view.getStopButton().setOnAction(_ -> stopAndExit());
+        view.getAudioButton().setOnAction(_ -> toggleAudioOutput());
+        view.getSubtitleButton().setOnAction(_ -> toggleSubtitles());
 
-        view.getStartOverButton()
-                .setOnAction(
-                        _ -> startOver()
-                );
-
-        view.getBackFiveButton()
-                .setOnAction(
-                        _ -> backFiveSeconds()
-                );
-
-        view.getPausePlayButton()
-                .setOnAction(
-                        _ -> togglePause()
-                );
-
-        view.getForwardFiveButton()
-                .setOnAction(
-                        _ -> forwardFiveSeconds()
-                );
-
-        view.getStopButton()
-                .setOnAction(
-                        _ -> stopAndExit()
-                );
-
-        view.getAudioButton()
-                .setOnAction(
-                        _ -> toggleAudioOutput()
-                );
-        
-        view.getSubtitleButton()
-        .setOnAction(
-                _ -> toggleSubtitles()
-        );
-
-        view.showAudioEnabled(
-                model.isAudioOutputEnabled()
-        );
-        
-        //show the starting subtitle state from the command line
-        view.showSubtitleEnabled(
-                subtitleEnabled
-        );
+        view.showAudioEnabled(model.isAudioOutputEnabled());
+        view.showSubtitleEnabled(subtitleEnabled);
     }
 
-    public void installKeyboardShortcuts(
-            Scene scene) {
-
-        scene.addEventFilter(
-                KeyEvent.KEY_PRESSED,
-                event -> {
-
-                    if (event.getCode() ==
-                            KeyCode.ESCAPE) {
-
-                        stopAndExit();
-                        event.consume();
-
-                    } else if (event.getCode() ==
-                            KeyCode.SPACE) {
-
-                        togglePause();
-                        event.consume();
-
-                    } else if (event.getCode() ==
-                            KeyCode.LEFT) {
-
-                        backFiveSeconds();
-                        event.consume();
-
-                    } else if (event.getCode() ==
-                            KeyCode.RIGHT) {
-
-                        forwardFiveSeconds();
-                        event.consume();
-
-                    } else if (event.getCode() ==
-                            KeyCode.HOME) {
-
-                        startOver();
-                        event.consume();
-
-                    } else if (event.getCode() ==
-                            KeyCode.A) {
-
-                        toggleAudioOutput();
-                        event.consume();
-                        
-                    } else if (event.getCode() ==
-                            KeyCode.S) {
-
-                        toggleSubtitles();
-                        event.consume();
-                    }
-                }
-        );
+    public void installKeyboardShortcuts(Scene scene) {
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, event -> {
+            if (event.getCode() == KeyCode.ESCAPE) {
+                stopAndExit();
+                event.consume();
+            } else if (event.getCode() == KeyCode.SPACE) {
+                togglePause();
+                event.consume();
+            } else if (event.getCode() == KeyCode.LEFT) {
+                backFiveSeconds();
+                event.consume();
+            } else if (event.getCode() == KeyCode.RIGHT) {
+                forwardFiveSeconds();
+                event.consume();
+            } else if (event.getCode() == KeyCode.HOME) {
+                startOver();
+                event.consume();
+            } else if (event.getCode() == KeyCode.A) {
+                toggleAudioOutput();
+                event.consume();
+            } else if (event.getCode() == KeyCode.S) {
+                toggleSubtitles();
+                event.consume();
+            }
+        });
     }
 
     public VideoPlayerView getView() {
@@ -205,23 +104,12 @@ public class VideoPlayerController {
 
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
-        subtitleProcessor.resetTiming();
         subtitleProcessor.setSubtitles(List.of());
 
-        if (subtitleEnabled) {
-            subtitleService.getSubtitles(file).thenAccept(subtitles -> {
-                subtitleProcessor.setSubtitles(subtitles);
+        model.play(file);
 
-                Platform.runLater(() -> {
-                    model.play(file);
-                });
-            });
-        } else {
-            model.play(file);
-
-            subtitleService.getSubtitles(file)
-                    .thenAccept(subtitleProcessor::setSubtitles);
-        }
+        subtitleService.getSubtitles(file)
+                .thenAccept(subtitleProcessor::setSubtitles);
     }
 
     public void shutdown() {
@@ -247,70 +135,39 @@ public class VideoPlayerController {
     private void toggleAudioOutput() {
         model.toggleAudioOutput();
     }
-    
+
     private void toggleSubtitles() {
-
-        subtitleEnabled =!subtitleEnabled;
-
-        //turn subtitle processing on or off
-        subtitleProcessor.setEnabled(
-                subtitleEnabled
-        );
-        
-        //update the CC button icon
-        view.showSubtitleEnabled(
-                subtitleEnabled
-        );
+        subtitleEnabled = !subtitleEnabled;
+        subtitleProcessor.setEnabled(subtitleEnabled);
+        view.showSubtitleEnabled(subtitleEnabled);
     }
 
     private void stopAndExit() {
         model.stopPlayback();
-
-        javafx.application.Platform
-                .exit();
+        javafx.application.Platform.exit();
     }
 
-    private void onVideoSizeChanged(
-            int width,
-            int height) {
-
-        videoSizeChangedHandler.accept(
-                width,
-                height
-        );
+    private void onVideoSizeChanged(int width, int height) {
+        videoSizeChangedHandler.accept(width, height);
     }
 
-    private void onFrameReady(
-            Image image) {
-
+    private void onFrameReady(Image image) {
         view.setImage(image);
     }
 
-    private void onStatusChanged(
-            String status) {
-
+    private void onStatusChanged(String status) {
         view.setStatus(status);
     }
 
-    private void onPlaybackStateChanged(
-            boolean playing,
-            boolean paused) {
-
+    private void onPlaybackStateChanged(boolean playing, boolean paused) {
         if (playing && !paused) {
-
             view.showPauseAction();
-
         } else {
-
             view.showPlayAction();
         }
     }
 
-    private void onAudioOutputStateChanged(
-            boolean audioOutputEnabled) {
-
-        view.showAudioEnabled(
-                audioOutputEnabled
-        );
+    private void onAudioOutputStateChanged(boolean audioOutputEnabled) {
+        view.showAudioEnabled(audioOutputEnabled);
     }
 }
