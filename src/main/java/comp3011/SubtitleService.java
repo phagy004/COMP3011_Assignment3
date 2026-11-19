@@ -26,13 +26,28 @@ public class SubtitleService {
     private final AudioExtractor audioExtractor = new AudioExtractor();
 
     public CompletableFuture<List<SubtitleSegment>> getSubtitles(File videoFile) {
+
+        if (videoFile == null || !videoFile.exists()) {
+            System.out.println("Media file is no longer available.");
+            return CompletableFuture.completedFuture(List.of());
+        }
+
         return CompletableFuture.supplyAsync(() -> {
             try {
+                if (!videoFile.exists()) {
+                    throw new IllegalStateException(
+                            "Media file was removed.");
+                }
+
                 return audioExtractor.extract(videoFile);
+
             } catch (Exception error) {
                 throw new RuntimeException(error);
             }
-        }).thenCompose(audioFile -> sendWithRetry(audioFile, 0))
+
+        }).thenCompose(audioFile ->
+                sendWithRetry(audioFile, 0))
+
           .exceptionally(error -> {
               System.out.println(
                       "Could not load subtitles: "
