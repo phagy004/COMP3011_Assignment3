@@ -24,6 +24,11 @@ public class SubtitleTranscriptionService {
 
     private final RestClient client = RestClient.create();
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final SubtitleUsageService usageService;
+
+    public SubtitleTranscriptionService(SubtitleUsageService usageService) {
+        this.usageService = usageService;
+    }
 
     public List<SubtitleItem> transcribe(MultipartFile file) throws IOException {
         String apiKey = getApiKey();
@@ -51,7 +56,18 @@ public class SubtitleTranscriptionService {
 
     private List<SubtitleItem> readSubtitles(String response) throws IOException {
         JsonNode json = objectMapper.readTree(response);
+
+        //track transcription usage in seconds
+        JsonNode usage = json.path("usage");
+
+        if (usage.has("seconds")) {
+            usageService.addUsage(usage.path("seconds").asDouble());
+        } else {
+            usageService.addUsage(json.path("duration").asDouble());
+        }
+
         JsonNode words = json.path("words");
+        JsonNode segments = json.path("segments");
 
         List<SubtitleItem> subtitles = new ArrayList<>();
 
@@ -66,6 +82,11 @@ public class SubtitleTranscriptionService {
             double wordEnd = word.path("end").asDouble();
 
             if (value.isEmpty()) {
+                continue;
+            }
+
+            //skip words that belong to a low-confidence silence segment
+            if (!isAllowedWord(wordStart, wordEnd, segments)) {
                 continue;
             }
 
@@ -85,11 +106,7 @@ public class SubtitleTranscriptionService {
             if (text.length() > 0 &&
                     (longPause || tooLong || tooLongOnScreen)) {
 
-                subtitles.add(new SubtitleItem(
-                        text.toString().trim(),
-                        start,
-                        Math.max(end, start + 1.0)
-                ));
+                addSubtitle(subtitles, text, start, end);
 
                 text.setLength(0);
                 start = wordStart;
@@ -100,30 +117,75 @@ public class SubtitleTranscriptionService {
             }
 
             text.append(value);
+
             end = wordEnd;
             previousEnd = wordEnd;
 
             if (endsSentence(value)) {
-                subtitles.add(new SubtitleItem(
-                        text.toString().trim(),
-                        start,
-                        Math.max(end, start + 1.0)
-                ));
+                addSubtitle(subtitles, text, start, end);
 
                 text.setLength(0);
                 start = -1;
+                previousEnd = -1;
             }
         }
 
-        if (text.length() > 0) {
-            subtitles.add(new SubtitleItem(
-                    text.toString().trim(),
-                    start,
-                    Math.max(end, start + 1.0)
-            ));
+        if (text.length() > 0 && start >= 0) {
+            addSubtitle(subtitles, text, start, end);
         }
 
         return subtitles;
+    }
+
+    private boolean isAllowedWord(
+            double wordStart,
+            double wordEnd,
+            JsonNode segments) {
+
+        if (!segments.isArray() || segments.isEmpty()) {
+            return true;
+        }
+
+        double middle = (wordStart + wordEnd) / 2.0;
+
+        for (JsonNode segment : segments) {
+            double segmentStart = segment.path("start").asDouble();
+            double segmentEnd = segment.path("end").asDouble();
+
+            if (middle < segmentStart || middle > segmentEnd) {
+                continue;
+            }
+
+            double noSpeechProb =
+                    segment.path("no_speech_prob").asDouble();
+
+            double aveLogProb =
+                    segment.path("avg_logprob").asDouble();
+
+            //skip only when both conditions are true
+            return !(noSpeechProb > 0.6 && aveLogProb < -1.0);
+        }
+
+        return true;
+    }
+
+    private void addSubtitle(
+            List<SubtitleItem> subtitles,
+            StringBuilder text,
+            double start,
+            double end) {
+
+        if (text.length() == 0 || start < 0) {
+            return;
+        }
+
+        double displayEnd = Math.max(end, start + 1.0);
+        displayEnd = Math.min(displayEnd, start + 7.0);
+
+        subtitles.add(new SubtitleItem(
+                text.toString().trim(),
+                start,
+                displayEnd));
     }
 
     private boolean endsSentence(String word) {
