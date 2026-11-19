@@ -82,6 +82,13 @@ public class VideoPlayerController {
         subtitleProcessor.setEnabled(
                 subtitleEnabled
         );
+        
+        //temporary subtitles for testing
+        subtitleProcessor.setSubtitles(List.of(
+                new SubtitleSegment("This is a subtitle test", 2.0, 5.0),
+                new SubtitleSegment("The subtitle should change here", 6.0, 9.0),
+                new SubtitleSegment("Press S to turn subtitles off", 10.0, 14.0)
+        ));
 
         model =
                 new VideoPlayerModel(
@@ -243,6 +250,13 @@ public class VideoPlayerController {
         subtitleProcessor.setEnabled(
                 subtitleEnabled
         );
+        
+        //temporary subtitle data for testing
+        subtitleProcessor.setSubtitles(List.of(
+                new SubtitleSegment("This is a subtitle test", 2.0, 5.0),
+                new SubtitleSegment("The subtitle should change here", 6.0, 9.0),
+                new SubtitleSegment("Press S to turn subtitles off", 10.0, 14.0)
+        ));
 
         //update the CC button icon
         view.showSubtitleEnabled(
