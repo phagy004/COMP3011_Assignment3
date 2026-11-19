@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <title>Speech to Text</title>
+
+</head>
+
+<body>
+
+    <h1>Speech to Text</h1>
+
+    <p>COMP3011 Assignment 1</p>
+
+    <button id="startButton">Start Recording</button>
+
+    <button id="stopButton" disabled>Stop Recording</button>
+
+    <p id="status">Ready</p>
+
+    <h2>Transcription</h2>
+
+    <p id="transcription">No transcription yet.</p>
+
+    <script>
+
+        //Store the MediaRecorder used for recording
+        let mediaRecorder;
+
+        //Store each piece of recorded audio
+        let audioChunks = [];
+
+        //Store the microphone stream
+        let audioStream;
+
+        //Get the start recording button from the page
+        const startButton = document.getElementById("startButton");
+
+        //Get the stop recording button from the page
+        const stopButton = document.getElementById("stopButton");
+
+        //Get the text used to show the current status
+        const statusText = document.getElementById("status");
+
+        //Get the place where transcription text will be shown
+        const transcriptionText = document.getElementById("transcription");
+
+        //Start recording when the user clicks the start button
+        startButton.addEventListener("click", async () => {
+
+            try {
+
+                //Tell the user that microphone permission is being requested
+                statusText.textContent = "Requesting microphone access...";
+
+                //Ask the browser for microphone access
+                audioStream =
+
+                    await navigator.mediaDevices.getUserMedia({
+
+                        audio: true
+
+                    });
+
+                //Clear old audio before starting a new recording
+                audioChunks = [];
+
+                //Create a recorder using the microphone stream
+                mediaRecorder =
+
+                    new MediaRecorder(audioStream);
+
+                //Run this each time recorded audio data becomes available
+                mediaRecorder.ondataavailable = (event) => {
+
+                    //Only save audio data if it contains something
+                    if (event.data.size > 0) {
+
+                        audioChunks.push(event.data);
+
+                    }
+
+                };
+
+                //Run this after the recording has stopped
+                mediaRecorder.onstop = async () => {
+
+                    //Combine all recorded audio chunks into one audio file
+                    const audioBlob =
+
+                        new Blob(audioChunks, {
+
+                            type: mediaRecorder.mimeType
+
+                        });
+
+                    //Print audio information to help check the recording
+                    console.log("Audio size:", audioBlob.size);
+
+                    console.log("Audio type:", audioBlob.type);
+
+                    //Stop the microphone after recording is finished
+                    audioStream.getTracks().forEach(track => {
+
+                        track.stop();
+
+                    });
+
+                    //Check that some audio was actually recorded
+                    if (audioBlob.size === 0) {
+
+                        statusText.textContent =
+
+                            "Recording failed";
+
+                        transcriptionText.textContent =
+
+                            "No audio was recorded.";
+
+                        //Allow the user to try recording again
+                        startButton.disabled = false;
+
+                        stopButton.disabled = true;
+
+                        return;
+
+                    }
+
+                    //Send the recorded audio to the backend
+                    await uploadAudio(audioBlob);
+
+                };
+
+                //Start recording from the microphone
+                mediaRecorder.start();
+
+                //Update the page to show that recording has started
+                statusText.textContent = "Recording...";
+
+                transcriptionText.textContent =
+
+                    "No transcription yet.";
+
+                //Disable start while recording and enable stop
+                startButton.disabled = true;
+
+                stopButton.disabled = false;
+
+            } catch (error) {
+
+                //Print microphone errors in the browser console
+                console.error(
+
+                    "Microphone error:",
+
+                    error
+
+                );
+
+                //Show an error if microphone access fails
+                statusText.textContent =
+
+                    "Microphone access failed";
+
+                transcriptionText.textContent =
+
+                    "Please allow microphone access and try again.";
+
+                //Allow the user to try again
+                startButton.disabled = false;
+
+                stopButton.disabled = true;
+
+            }
+
+        });
+
+
+        //Stop recording when the user clicks the stop button
+        stopButton.addEventListener("click", () => {
+
+            //Only stop if a recording is currently running
+            if (
+
+                mediaRecorder &&
+
+                mediaRecorder.state === "recording"
+
+            ) {
+
+                //Tell the user that the recording is being processed
+                statusText.textContent =
+
+                    "Processing recording...";
+
+                //Disable the stop button so it cannot be clicked twice
+                stopButton.disabled = true;
+
+                //Stop the MediaRecorder
+                mediaRecorder.stop();
+
+            }
+
+        });
+
+
+        //Send the recorded audio to the Spring backend
+        async function uploadAudio(audioBlob) {
+
+            try {
+
+                //Update the page while the audio is being sent
+                statusText.textContent =
+
+                    "Sending audio...";
+
+                //Create form data for the HTTP request
+                const formData =
+
+                    new FormData();
+
+                //Add the audio file using the name expected by the backend
+                formData.append(
+
+                    "audio",
+
+                    audioBlob,
+
+                    "recording.webm"
+
+                );
+
+                //Send the audio to the transcription endpoint
+                const response =
+
+                    await fetch(
+
+                        "/api/transcribe",
+
+                        {
+
+                            method: "POST",
+
+                            body: formData
+
+                        }
+
+                    );
+
+                //Convert the backend response from JSON
+                const data =
+
+                    await response.json();
+
+                //Check if the backend returned an error
+                if (!response.ok) {
+
+                    throw new Error(
+
+                        data.message ||
+
+                        "Transcription failed"
+
+                    );
+
+                }
+
+                //Check that transcription text was returned
+                if (!data.text) {
+
+                    throw new Error(
+
+                        "No transcription text was returned"
+
+                    );
+
+                }
+
+                //Show the transcription returned by the backend
+                transcriptionText.textContent =
+
+                    data.text;
+
+                //Tell the user that the request finished successfully
+                statusText.textContent =
+
+                    "Transcription complete";
+
+            } catch (error) {
+
+                //Print the error in the browser console
+                console.error(
+
+                    "Transcription error:",
+
+                    error
+
+                );
+
+                //Show the transcription error on the page
+                statusText.textContent =
+
+                    "Transcription failed";
+
+                transcriptionText.textContent =
+
+                    error.message;
+
+            } finally {
+
+                //Reset the buttons so another recording can be started
+                startButton.disabled = false;
+
+                stopButton.disabled = true;
+
+            }
+
+        }
+
+    </script>
+
+</body>
+
+</html>
