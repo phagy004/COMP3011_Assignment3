@@ -26,6 +26,13 @@ public class VideoPlayerController {
     //Handles audio extraction and communication with the subtitle web server.
     private final SubtitleService subtitleService = new SubtitleService();
 
+    //Stores the media file currently being played.
+    //This is needed if subtitles are enabled after playback has already started.
+    private File currentFile;
+
+    //Prevents the same subtitle request from being started more than once.
+    private boolean subtitleLoadStarted;
+
     public VideoPlayerController(
             boolean audioEnabled,
             boolean subtitleEnabled,
@@ -122,6 +129,10 @@ public class VideoPlayerController {
     }
 
     public void play(File file) {
+        //Remember the current file in case subtitles are enabled later.
+        currentFile = file;
+        subtitleLoadStarted = false;
+
         view.setPlaybackControlsDisabled(false);
 
         //Clear subtitle data from any previously opened media file.
@@ -132,10 +143,32 @@ public class VideoPlayerController {
         //does not stop the user from watching the video.
         model.play(file);
 
+        //If subtitles started enabled with -S, begin loading immediately.
+        if (subtitleEnabled) {
+            loadSubtitles();
+        }
+    }
+
+    //Starts loading subtitles once for the current media file.
+    //This is used both when -S is enabled and when the user presses S later.
+    private void loadSubtitles() {
+        if (currentFile == null || subtitleLoadStarted) {
+            return;
+        }
+
+        subtitleLoadStarted = true;
+
         //Audio extraction, server communication and transcription all happen
-        //asynchronously. The processor receives the subtitle list when ready.
-        subtitleService.getSubtitles(file)
-                .thenAccept(subtitleProcessor::setSubtitles);
+        //asynchronously. Playback continues while this work is being done.
+        subtitleService.getSubtitles(currentFile)
+                .thenAccept(subtitles -> {
+                    subtitleProcessor.setSubtitles(subtitles);
+
+                    System.out.println(
+                            "Loaded "
+                            + subtitles.size()
+                            + " subtitles");
+                });
     }
 
     public void shutdown() {
@@ -163,7 +196,7 @@ public class VideoPlayerController {
     }
 
     //Used by both the CC button and the S keyboard shortcut.
-    //Disabling subtitles does not stop playback or delete the subtitle data.
+    //Disabling subtitles does not stop playback or delete subtitle data.
     private void toggleSubtitles() {
         subtitleEnabled = !subtitleEnabled;
 
@@ -172,6 +205,12 @@ public class VideoPlayerController {
 
         //Change the CC icon so the user can see the current state.
         view.showSubtitleEnabled(subtitleEnabled);
+
+        //If playback started with subtitles off, pressing S for the first time
+        //must start the subtitle request so subtitles can appear during playback.
+        if (subtitleEnabled) {
+            loadSubtitles();
+        }
     }
 
     private void stopAndExit() {
