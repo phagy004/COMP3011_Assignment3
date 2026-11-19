@@ -206,6 +206,7 @@ public class VideoPlayerController {
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
         subtitleProcessor.setSubtitles(List.of());
+        subtitleProcessor.resetTiming();
 
         //start video immediately
         model.play(file);

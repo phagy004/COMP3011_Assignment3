@@ -21,6 +21,7 @@ public class SubtitleFrameProcessor extends FrameProcessor {
     private static final int MAX_LINES = 2;
 
     private volatile boolean enabled = true;
+    private volatile long mediaStartTimestampUs = Long.MIN_VALUE;
     private volatile List<SubtitleSegment> subtitles = List.of();
 
     public SubtitleFrameProcessor() {
@@ -29,6 +30,11 @@ public class SubtitleFrameProcessor extends FrameProcessor {
 
     @Override
     public void process(Frame frame, InfoFrame info) throws Exception {
+
+        if (mediaStartTimestampUs == Long.MIN_VALUE) {
+            mediaStartTimestampUs = info.timestampUs();
+        }
+
         if (!enabled) {
             return;
         }
@@ -61,7 +67,18 @@ public class SubtitleFrameProcessor extends FrameProcessor {
     }
 
     public SubtitleSegment findSubtitle(long timestampUs) {
-        double timeSeconds = timestampUs / 1_000_000.0;
+
+        long startTimestamp = mediaStartTimestampUs;
+
+        double timeSeconds;
+
+        if (startTimestamp == Long.MIN_VALUE) {
+            timeSeconds = 0;
+        } else {
+            timeSeconds =
+                    Math.max(0, timestampUs - startTimestamp)
+                    / 1_000_000.0;
+        }
 
         for (SubtitleSegment subtitle : subtitles) {
             if (subtitle.isVisibleAt(timeSeconds)) {
@@ -238,5 +255,9 @@ public class SubtitleFrameProcessor extends FrameProcessor {
         int result = (overlayValue * alpha + originalValue * (255 - alpha)) / 255;
 
         pixels.put(index, (byte) result);
+    }
+    
+    public void resetTiming() {
+        mediaStartTimestampUs = Long.MIN_VALUE;
     }
 }

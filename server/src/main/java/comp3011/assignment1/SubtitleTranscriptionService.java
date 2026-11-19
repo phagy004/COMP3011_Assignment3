@@ -115,18 +115,10 @@ public class SubtitleTranscriptionService {
         }
     }
 
-    private List<SubtitleItem> readSubtitles(
-            String response) throws IOException {
+    private List<SubtitleItem> readSubtitles(String response) throws IOException {
+        JsonNode json = objectMapper.readTree(response);
 
-        if (response == null || response.isBlank()) {
-            return List.of();
-        }
-
-        JsonNode json =
-                objectMapper.readTree(response);
-
-        JsonNode usage =
-                json.path("usage");
+        JsonNode usage = json.path("usage");
 
         if (usage.has("seconds")) {
             usageService.addUsage(
@@ -136,60 +128,97 @@ public class SubtitleTranscriptionService {
                     json.path("duration").asDouble());
         }
 
-        JsonNode segments =
-                json.path("segments");
+        JsonNode words = json.path("words");
+        JsonNode segments = json.path("segments");
 
-        List<SubtitleItem> subtitles =
-                new ArrayList<>();
+        List<SubtitleItem> subtitles = new ArrayList<>();
 
-        for (JsonNode segment : segments) {
+        StringBuilder text = new StringBuilder();
 
-            String text =
-                    segment.path("text")
-                            .asText()
-                            .trim();
+        double start = -1;
+        double end = 0;
+        double previousEnd = -1;
 
-            double start =
-                    segment.path("start")
-                            .asDouble();
+        for (JsonNode word : words) {
 
-            double end =
-                    segment.path("end")
-                            .asDouble();
+            String value =
+                    word.path("word").asText().trim();
 
-            double noSpeechProb =
-                    segment.path("no_speech_prob")
-                            .asDouble();
+            double wordStart =
+                    word.path("start").asDouble();
 
-            double aveLogProb =
-                    segment.path("avg_logprob")
-                            .asDouble();
+            double wordEnd =
+                    word.path("end").asDouble();
 
-            if (noSpeechProb > 0.6
-                    && aveLogProb < -1.0) {
-
+            if (value.isEmpty()) {
                 continue;
             }
 
-            if (text.isEmpty()) {
+            if (!isAllowedWord(
+                    wordStart,
+                    wordEnd,
+                    segments)) {
                 continue;
             }
 
-            double displayEnd =
-                    Math.max(
-                            end,
-                            start + 1.0);
+            if (start < 0) {
+                start = wordStart;
+            }
 
-            displayEnd =
-                    Math.min(
-                            displayEnd,
-                            start + 7.0);
+            boolean pause =
+                    previousEnd >= 0
+                    && wordStart - previousEnd > 0.6;
 
-            subtitles.add(
-                    new SubtitleItem(
-                            text,
-                            start,
-                            displayEnd));
+            boolean tooLong =
+                    text.length()
+                    + value.length()
+                    + 1 > 84;
+
+            boolean tooLongTime =
+                    wordEnd - start > 7.0;
+
+            if (text.length() > 0
+                    && (pause || tooLong || tooLongTime)) {
+
+                addSubtitle(
+                        subtitles,
+                        text,
+                        start,
+                        end);
+
+                text.setLength(0);
+                start = wordStart;
+            }
+
+            if (text.length() > 0) {
+                text.append(" ");
+            }
+
+            text.append(value);
+
+            end = wordEnd;
+            previousEnd = wordEnd;
+
+            if (endsSentence(value)) {
+
+                addSubtitle(
+                        subtitles,
+                        text,
+                        start,
+                        end);
+
+                text.setLength(0);
+                start = -1;
+                previousEnd = -1;
+            }
+        }
+
+        if (text.length() > 0 && start >= 0) {
+            addSubtitle(
+                    subtitles,
+                    text,
+                    start,
+                    end);
         }
 
         System.out.println(
@@ -198,6 +227,71 @@ public class SubtitleTranscriptionService {
                 + " subtitles");
 
         return subtitles;
+    }
+    
+    private boolean isAllowedWord(
+            double wordStart,
+            double wordEnd,
+            JsonNode segments) {
+
+        if (!segments.isArray() || segments.isEmpty()) {
+            return true;
+        }
+
+        double middle = (wordStart + wordEnd) / 2.0;
+
+        for (JsonNode segment : segments) {
+
+            double segmentStart =
+                    segment.path("start").asDouble();
+
+            double segmentEnd =
+                    segment.path("end").asDouble();
+
+            if (middle < segmentStart || middle > segmentEnd) {
+                continue;
+            }
+
+            double noSpeechProb =
+                    segment.path("no_speech_prob").asDouble();
+
+            double aveLogProb =
+                    segment.path("avg_logprob").asDouble();
+
+            return !(noSpeechProb > 0.6
+                    && aveLogProb < -1.0);
+        }
+
+        return true;
+    }
+
+    private void addSubtitle(
+            List<SubtitleItem> subtitles,
+            StringBuilder text,
+            double start,
+            double end) {
+
+        if (text.length() == 0 || start < 0) {
+            return;
+        }
+
+        double displayEnd =
+                Math.max(end, start + 1.0);
+
+        displayEnd =
+                Math.min(displayEnd, start + 7.0);
+
+        subtitles.add(
+                new SubtitleItem(
+                        text.toString().trim(),
+                        start,
+                        displayEnd));
+    }
+
+    private boolean endsSentence(String word) {
+        return word.endsWith(".")
+                || word.endsWith("?")
+                || word.endsWith("!");
     }
 
     private String getApiKey()
