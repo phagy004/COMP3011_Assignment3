@@ -81,9 +81,19 @@ public class VideoPlayerController {
                 .setOnAction(
                         _ -> toggleAudioOutput()
                 );
+        
+        view.getSubtitleButton()
+        .setOnAction(
+                _ -> toggleSubtitles()
+        );
 
         view.showAudioEnabled(
                 model.isAudioOutputEnabled()
+        );
+        
+        //show the starting subtitle state from the command line
+        view.showSubtitleEnabled(
+                subtitleEnabled
         );
     }
 
@@ -128,6 +138,12 @@ public class VideoPlayerController {
                             KeyCode.A) {
 
                         toggleAudioOutput();
+                        event.consume();
+                        
+                    } else if (event.getCode() ==
+                            KeyCode.S) {
+
+                        toggleSubtitles();
                         event.consume();
                     }
                 }
@@ -174,6 +190,17 @@ public class VideoPlayerController {
 
     private void toggleAudioOutput() {
         model.toggleAudioOutput();
+    }
+    
+    private void toggleSubtitles() {
+
+        subtitleEnabled =
+                !subtitleEnabled;
+
+        //update the CC button icon
+        view.showSubtitleEnabled(
+                subtitleEnabled
+        );
     }
 
     private void stopAndExit() {
