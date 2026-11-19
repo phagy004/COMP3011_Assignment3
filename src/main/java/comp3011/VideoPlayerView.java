@@ -57,6 +57,7 @@ public class VideoPlayerView {
     private final Button forwardFiveButton;
     private final Button stopButton;
     private final Button audioButton;
+    private final Button subtitleButton;
 
     public VideoPlayerView() {
         imageView.setPreserveRatio(true);
@@ -75,6 +76,7 @@ public class VideoPlayerView {
         forwardFiveButton = iconButton(createLoopIcon(true, "5"));
         stopButton = iconButton(createStopIcon());
         audioButton = iconButton(createAudioIcon(false));
+        subtitleButton = iconButton(createSubtitleIcon(false));
         setPlaybackControlsDisabled(true);
 
         HBox controls = new HBox(
@@ -85,6 +87,7 @@ public class VideoPlayerView {
                 forwardFiveButton,
                 stopButton,
                 audioButton,
+                subtitleButton,
                 statusLabel);
 
         controls.setPadding(new Insets(10));
@@ -126,6 +129,10 @@ public class VideoPlayerView {
     public Button getAudioButton() {
         return audioButton;
     }
+    
+    public Button getSubtitleButton() {
+        return subtitleButton;
+    }
 
     public void setStatus(String status) {
         statusLabel.setText(status);
@@ -150,6 +157,12 @@ public class VideoPlayerView {
     public void showAudioEnabled(boolean audioEnabled) {
         audioButton.setGraphic(createAudioIcon(audioEnabled));
     }
+    
+    public void showSubtitleEnabled(boolean subtitleEnabled) {
+        subtitleButton.setGraphic(
+                createSubtitleIcon(subtitleEnabled)
+        );
+    }
 
     public void setPlaybackControlsDisabled(boolean disabled) {
         startOverButton.setDisable(disabled);
@@ -158,6 +171,7 @@ public class VideoPlayerView {
         forwardFiveButton.setDisable(disabled);
         stopButton.setDisable(disabled);
         audioButton.setDisable(disabled);
+        subtitleButton.setDisable(disabled);
     }
 
     // There are a bunch of tooltip handling methods starting from here. We want to use tooltips so that people with
@@ -169,6 +183,7 @@ public class VideoPlayerView {
         setButtonTooltip(forwardFiveButton, "[RIGHT]");
         setButtonTooltip(stopButton, "[ESC]");
         setButtonTooltip(audioButton, "[A]");
+        setButtonTooltip(subtitleButton, "[S]");
     }
 
     private void setButtonTooltip(Button button, String text) {
@@ -306,6 +321,85 @@ public class VideoPlayerView {
         gc.setFill(Color.BLACK);
         gc.fillRect(9, 9, 11, 11);
         return canvas;
+    }
+    
+    //simple CC icon for subtitles
+    private Node createSubtitleIcon(
+            boolean subtitleEnabled) {
+
+        Pane pane = new Pane();
+
+        pane.setMinSize(
+                ICON_SIZE,
+                ICON_SIZE
+        );
+
+        pane.setPrefSize(
+                ICON_SIZE,
+                ICON_SIZE
+        );
+
+        pane.setMaxSize(
+                ICON_SIZE,
+                ICON_SIZE
+        );
+
+        Label label =
+                new Label("CC");
+
+        label.setAlignment(
+                Pos.CENTER
+        );
+
+        label.setMinSize(
+                ICON_SIZE,
+                ICON_SIZE
+        );
+
+        label.setPrefSize(
+                ICON_SIZE,
+                ICON_SIZE
+        );
+
+        label.setStyle(
+                "-fx-font-size: 12px;"
+                + "-fx-font-weight: bold;"
+                + "-fx-text-fill: black;"
+        );
+
+        label.setMouseTransparent(true);
+
+        pane.getChildren().add(label);
+
+        //show a slash when subtitles are disabled
+        if (!subtitleEnabled) {
+
+            Line slash =
+                    new Line(
+                            5,
+                            22,
+                            23,
+                            6
+                    );
+
+            slash.setStroke(
+                    Color.BLACK
+            );
+
+            slash.setStrokeWidth(
+                    2.0
+            );
+
+            slash.setStrokeLineCap(
+                    StrokeLineCap.ROUND
+            );
+
+            pane.getChildren().add(
+                    slash
+            );
+        }
+
+        return pane;
     }
 
     // Kind of speaker looking thing ...
