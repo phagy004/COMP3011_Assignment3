@@ -22,8 +22,12 @@ public class VideoPlayerController {
     private final VideoPlayerView view;
     private final BiConsumer<Integer, Integer> videoSizeChangedHandler;
 
+    //stores the current subtitle state
+    private boolean subtitleEnabled;
+
     public VideoPlayerController(
             boolean audioEnabled,
+            boolean subtitleEnabled,
             List<FrameProcessor> frameProcessors,
             BiConsumer<Integer, Integer> videoSizeChangedHandler) {
 
@@ -33,7 +37,10 @@ public class VideoPlayerController {
         this.videoSizeChangedHandler =
                 videoSizeChangedHandler;
 
-        //pass command line processors down to the model
+        //use the command line value as the starting subtitle state
+        this.subtitleEnabled =
+                subtitleEnabled;
+
         model =
                 new VideoPlayerModel(
                         audioEnabled,
@@ -129,6 +136,10 @@ public class VideoPlayerController {
 
     public VideoPlayerView getView() {
         return view;
+    }
+
+    public boolean isSubtitleEnabled() {
+        return subtitleEnabled;
     }
 
     public void play(

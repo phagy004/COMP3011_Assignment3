@@ -1,3 +1,13 @@
+/*
+ * Starter code supplied for Adelaide University COMP3011 Assignment 2.
+ * Students are free to modify this file for assessment purposes.
+ * 
+ * Authors:
+ *   1. Simon Ratcliffe, in collaboration with GPT-5.6 Terra
+ *   2. Gia Minh Pham - student id: a3145117
+ *
+ * Copyright 2026 Simon Ratcliffe
+ */
 package comp3011;
 
 import java.util.List;
@@ -33,9 +43,10 @@ public class VideoPlayerApp extends Application {
     public void start(Stage stage) {
         this.stage = stage;
 
-        //pass selected frame processors to the controller
+        //pass command line settings to the controller
         controller = new VideoPlayerController(
                 commandLineController.isAudioRequested(),
+                commandLineController.isSubtitleRequested(),
                 commandLineController.getFrameProcessors(),
                 this::setVideoSize);
 
