@@ -8,6 +8,7 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.application.Platform;
 
 /**
  * The controller part of the video player model-view-controller architecture.
@@ -204,12 +205,24 @@ public class VideoPlayerController {
 
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
-
         subtitleProcessor.setSubtitles(List.of());
-        model.play(file);
 
-        subtitleService.getSubtitles(file)
-                .thenAccept(subtitleProcessor::setSubtitles);
+        if (subtitleEnabled) {
+            //wait for subtitles before starting so timestamps begin at the same time
+            subtitleService.getSubtitles(file).thenAccept(subtitles -> {
+                subtitleProcessor.setSubtitles(subtitles);
+
+                Platform.runLater(() -> {
+                    model.play(file);
+                });
+            });
+        } else {
+            //subtitles are off, so video can start immediately
+            model.play(file);
+
+            subtitleService.getSubtitles(file)
+                    .thenAccept(subtitleProcessor::setSubtitles);
+        }
     }
 
     public void shutdown() {
