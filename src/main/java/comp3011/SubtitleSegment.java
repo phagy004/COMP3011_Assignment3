@@ -1,5 +1,7 @@
 package comp3011;
 
+//Represents one subtitle received by the desktop video player.
+//Each subtitle contains its text and the time range when it should appear.
 public class SubtitleSegment {
 
     private final String text;
@@ -28,9 +30,9 @@ public class SubtitleSegment {
         return endSeconds;
     }
 
-    public boolean isVisibleAt(
-            double timeSeconds) {
-
+    //Checks whether this subtitle should be visible at the current
+    //video playback position.
+    public boolean isVisibleAt(double timeSeconds) {
         return timeSeconds >= startSeconds
                 && timeSeconds <= endSeconds;
     }

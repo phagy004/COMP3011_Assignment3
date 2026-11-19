@@ -14,8 +14,16 @@ public class VideoPlayerController {
     private final VideoPlayerModel model;
     private final VideoPlayerView view;
     private final BiConsumer<Integer, Integer> videoSizeChangedHandler;
+
+    //Stores the current subtitle state.
+    //This value is initially controlled by the -S command line option.
     private boolean subtitleEnabled;
+
+    //Keeps a reference to the subtitle processor.
+    //This allows subtitles to be enabled or disabled while the video is playing.
     private final SubtitleFrameProcessor subtitleProcessor;
+
+    //Handles audio extraction and communication with the subtitle web server.
     private final SubtitleService subtitleService = new SubtitleService();
 
     public VideoPlayerController(
@@ -26,10 +34,14 @@ public class VideoPlayerController {
 
         this.view = new VideoPlayerView();
         this.videoSizeChangedHandler = videoSizeChangedHandler;
+
+        //Use the command line subtitle option as the starting state.
         this.subtitleEnabled = subtitleEnabled;
 
         SubtitleFrameProcessor foundSubtitleProcessor = null;
 
+        //If -S was used, CommandLineController has already added a
+        //SubtitleFrameProcessor to the normal frame processing pipeline.
         for (FrameProcessor processor : frameProcessors) {
             if (processor instanceof SubtitleFrameProcessor) {
                 foundSubtitleProcessor = (SubtitleFrameProcessor) processor;
@@ -37,6 +49,8 @@ public class VideoPlayerController {
             }
         }
 
+        //Subtitles must also be switchable when -S was not used.
+        //Therefore a disabled subtitle processor is still added to the pipeline.
         if (foundSubtitleProcessor == null) {
             foundSubtitleProcessor = new SubtitleFrameProcessor();
             foundSubtitleProcessor.setEnabled(false);
@@ -44,6 +58,8 @@ public class VideoPlayerController {
         }
 
         subtitleProcessor = foundSubtitleProcessor;
+
+        //Make sure the processor and the subtitle button begin in the same state.
         subtitleProcessor.setEnabled(subtitleEnabled);
 
         model = new VideoPlayerModel(
@@ -55,6 +71,7 @@ public class VideoPlayerController {
                 this::onPlaybackStateChanged,
                 this::onAudioOutputStateChanged);
 
+        //Connect the player controls to their controller actions.
         view.getStartOverButton().setOnAction(_ -> startOver());
         view.getBackFiveButton().setOnAction(_ -> backFiveSeconds());
         view.getPausePlayButton().setOnAction(_ -> togglePause());
@@ -63,6 +80,7 @@ public class VideoPlayerController {
         view.getAudioButton().setOnAction(_ -> toggleAudioOutput());
         view.getSubtitleButton().setOnAction(_ -> toggleSubtitles());
 
+        //Show the initial audio and subtitle states in the UI.
         view.showAudioEnabled(model.isAudioOutputEnabled());
         view.showSubtitleEnabled(subtitleEnabled);
     }
@@ -88,6 +106,7 @@ public class VideoPlayerController {
                 toggleAudioOutput();
                 event.consume();
             } else if (event.getCode() == KeyCode.S) {
+                //The S shortcut has the same behaviour as pressing the CC button.
                 toggleSubtitles();
                 event.consume();
             }
@@ -104,10 +123,17 @@ public class VideoPlayerController {
 
     public void play(File file) {
         view.setPlaybackControlsDisabled(false);
+
+        //Clear subtitle data from any previously opened media file.
         subtitleProcessor.setSubtitles(List.of());
 
+        //Start playback immediately.
+        //Subtitle transcription happens separately so a slow network request
+        //does not stop the user from watching the video.
         model.play(file);
 
+        //Audio extraction, server communication and transcription all happen
+        //asynchronously. The processor receives the subtitle list when ready.
         subtitleService.getSubtitles(file)
                 .thenAccept(subtitleProcessor::setSubtitles);
     }
@@ -136,9 +162,15 @@ public class VideoPlayerController {
         model.toggleAudioOutput();
     }
 
+    //Used by both the CC button and the S keyboard shortcut.
+    //Disabling subtitles does not stop playback or delete the subtitle data.
     private void toggleSubtitles() {
         subtitleEnabled = !subtitleEnabled;
+
+        //The processor immediately stops or resumes drawing subtitles.
         subtitleProcessor.setEnabled(subtitleEnabled);
+
+        //Change the CC icon so the user can see the current state.
         view.showSubtitleEnabled(subtitleEnabled);
     }
 
