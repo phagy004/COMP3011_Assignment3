@@ -27,6 +27,8 @@ public class VideoPlayerController {
     
     //keeps the subtitle processor so it can be toggled during playback
     private final SubtitleFrameProcessor subtitleProcessor;
+    
+    private final SubtitleService subtitleService = new SubtitleService();
 
     public VideoPlayerController(
             boolean audioEnabled,
@@ -82,13 +84,6 @@ public class VideoPlayerController {
         subtitleProcessor.setEnabled(
                 subtitleEnabled
         );
-        
-        //temporary subtitles for testing
-        subtitleProcessor.setSubtitles(List.of(
-                new SubtitleSegment("This is a subtitle test", 2.0, 5.0),
-                new SubtitleSegment("The subtitle should change here", 6.0, 9.0),
-                new SubtitleSegment("Press S to turn subtitles off", 10.0, 14.0)
-        ));
 
         model =
                 new VideoPlayerModel(
@@ -207,13 +202,9 @@ public class VideoPlayerController {
         return subtitleEnabled;
     }
 
-    public void play(
-            File file) {
-
-        view.setPlaybackControlsDisabled(
-                false
-        );
-
+    public void play(File file) {
+        view.setPlaybackControlsDisabled(false);
+        subtitleProcessor.setSubtitles(subtitleService.getSubtitles(file));
         model.play(file);
     }
 
@@ -243,21 +234,13 @@ public class VideoPlayerController {
     
     private void toggleSubtitles() {
 
-        subtitleEnabled =
-                !subtitleEnabled;
+        subtitleEnabled =!subtitleEnabled;
 
         //turn subtitle processing on or off
         subtitleProcessor.setEnabled(
                 subtitleEnabled
         );
         
-        //temporary subtitle data for testing
-        subtitleProcessor.setSubtitles(List.of(
-                new SubtitleSegment("This is a subtitle test", 2.0, 5.0),
-                new SubtitleSegment("The subtitle should change here", 6.0, 9.0),
-                new SubtitleSegment("Press S to turn subtitles off", 10.0, 14.0)
-        ));
-
         //update the CC button icon
         view.showSubtitleEnabled(
                 subtitleEnabled
